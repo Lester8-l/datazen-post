@@ -46,7 +46,7 @@ agent_created: true
    只給題目 → 先查（WebSearch／WebFetch），把來源列出來讓他確認。
 2. **跑框架**：模式 B 用三層翻譯（發生咩事 → 點解關你事 → 你可以點做），
    見 `references/content-framework.md`；模式 A 用「一句立場 + 一個數字 + 一個動作」。
-3. **提 A／B／C 畫面方案**。按 [圖片指引](references/images.md) 提出三個切合題材嘅方向，每個交代封面重點、圖片形式、背景同資訊頁點排。涉及人物或吉祥物時，讀 [品牌第六節](references/brand.md)。選版型見 `references/layouts.md`。
+3. **提 A／B／C 畫面方案**。按 [圖片指引](references/images.md) 提出三個切合題材嘅方向，每個交代封面重點、圖片形式、背景同資訊頁點排。Data Zen IG 優先安排 Lester 同銀灰貓喺封面自然同框，尾頁可用另一個動作呼應。講明每個方向兩個角色喺邊頁出場、做緊咩。定角色特徵先讀 [品牌第六節](references/brand.md)。選版型見 `references/layouts.md`。
 4. **交文字稿同方案俾用戶定稿**。文字稿按下節格式，配一份易比較嘅 A／B／C 概念。等用戶敲定邊個方向或點混合，再做正式圖同 HTML。有圖嘅卡喺分鏡上寫低 `[畫面]`、圖片嘅作用同文字留白。
 5. **順手自檢**：對照「合規與來源」掃一次，有禁詞或來源不全就當場改。
 
@@ -243,7 +243,7 @@ agent_created: true
 - `references/brand.md` — **品牌與視覺規則。改設計前先讀。**
 - `references/playbook.md` — **實操手冊：真實出圖中過嘅伏、修復數字、模板維護與合規原則。**
 - `references/layouts.md` — 8 款版型與選版規則。
-- `references/images.md` — 出圖時機、固定角色參考、完整場景、圖文留白及 MPF 輪播分鏡。
+- `references/images.md` — 出圖時機、固定角色參考、圖文留白，以及 MPF 同醫療保費儲備輪播分鏡。
 - `references/content-framework.md` — 三層翻譯法、標題公式、來源規範、題材禁區。
 - `references/types-library.md` — 8 類懶人包的角度、合規注意、建議來源。
 - `references/topic-library.md` — 10 個常見題材的切入角度。
