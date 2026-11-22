@@ -8,12 +8,12 @@
 ## 一、出圖流程（每次照跑）
 
 ```
-文字稿（等確認）
+文字稿＋A／B／C 畫面方案（等用戶拍板）
 → 需要新場景或角色動作時，按 images.md 定分鏡同生成底圖
 → 生成 deck.html
 → check-fit（溢出）＋ check-orphans（孤字）
 → check-source（模式 B）＋ check-compliance
-→ build-embed-fonts.py        ← 改過字就要重跑
+→ build-embed-fonts.py → 試改原稿冇用過嘅字同匯出
 → export-png.py → export-pdf.py（4:5 ＋ --a4）
 → check-contrast.py out/
 → 目視：縮圖總覽 ＋ 放大最密嗰張
@@ -100,8 +100,7 @@
 - **Git Bash 雙引號入面跑 `python -c` 嘅 regex 會靜默失效**（輸出空、冇報錯）。
   要分析就寫成 `.py` 檔再跑，或者直接用搜尋工具。
 - `file://` 開 HTML 會靜默載唔到本地字型（CORS），所有要開瀏覽器嘅腳本都行 `_serve.py`。
-- 字體子集只覆蓋**跑腳本當刻**嘅字；改字後要重跑 `build-embed-fonts.py`，
-  否則 HTML 嘅「匯出 PNG」按鈕會出系統字。
+- 成品打包完整字型俾預覽同改字共用。原稿用精簡字型匯出，新增字符會載入對應嘅完整字型。換字型或改模板後先重新打包。
 
 ---
 
@@ -112,5 +111,4 @@
 - **Iansui（芫荽）**：手寫感楷體，用喺每張卡一句嘅手寫主張。
 - **LXGW WenKai TC（霞鶩文楷）**：正文楷體，帶溫度。
 
-其餘（Noto Serif TC／Noto Sans TC／JetBrains Mono／Cormorant Garamond）走 CDN。
-巨型 TTF 刻意放本地：出圖時由 `_serve.py` 直出，唔靠網絡，避免下載唔完退回系統字。
+按題材選用本地 Noto Serif TC、JetBrains Mono 或其他已授權字型。要俾用戶離線改字嘅成品，將卡片用到嘅完整字型內嵌，預覽同匯出都用同一份字型資料。

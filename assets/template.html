@@ -355,10 +355,7 @@ em.hl{font-style:normal;color:var(--accent-soft)}
     <button class="btn" id="btn-png" data-noexport>⤓ 匯出 PNG</button>
     <button class="btn" id="btn-pdf" data-noexport>⎙ 匯出 PDF</button>
   </div>
-  <div class="hint">
-    出 PNG 用 <code>python scripts/export-png.py &lt;deck.html&gt;</code>——霧用了 CSS filter，瀏覽器截圖庫會失真。
-    這頁只負責改字與預覽；寫好後跑四支檢查（fit／orphans／contrast／compliance）才算完成。
-  </div>
+  <div class="hint">按「編輯文字」後點選卡片內嘅字句。字型同版面會沿用同一套設定。</div>
 </div>
 
 <div class="deck">
@@ -635,39 +632,6 @@ window.DZ_CONFIG = {
     applyKeywords();
   }
 
-  /* ── 溢出偵測（編輯模式下即時提示） ─────────────────────── */
-  function checkOverflow() {
-    document.querySelectorAll('.card .frame').forEach(f => {
-      const card = f.closest('.card');
-      const over = f.scrollHeight - f.clientHeight;
-      card.classList.toggle('overflow', over > 2);
-      let box = card.querySelector('.ovf');
-      if (!box) {
-        box = document.createElement('div');
-        box.className = 'ovf';
-        card.appendChild(box);
-      }
-      box.textContent = '⚠ 內容超出 ' + over + 'px，匯出會被裁掉，請減字';
-    });
-  }
-
-  /* ── 編輯模式 ────────────────────────────────────────────── */
-  const btnEdit = document.getElementById('btn-edit');
-  btnEdit.addEventListener('click', () => {
-    const on = !btnEdit.classList.contains('on');
-    btnEdit.classList.toggle('on', on);
-    btnEdit.textContent = on ? '✓ 完成編輯' : '✎ 編輯文字';
-    document.querySelectorAll('.card .frame').forEach(f => {
-      f.contentEditable = on ? 'true' : 'false';
-    });
-    if (on) {
-      checkOverflow();
-      document.querySelectorAll('.card .frame').forEach(f => {
-        f.addEventListener('input', checkOverflow);
-      });
-    }
-  });
-
   document.getElementById('f-handle').addEventListener('input', e => {
     CFG.handle = e.target.value.trim();
     document.querySelectorAll('.handle').forEach(el => el.textContent = '@' + CFG.handle);
@@ -683,57 +647,6 @@ window.DZ_CONFIG = {
 })();
 </script>
 
-<script>
-/* ══════════════════════════════════════════════════════════════
-   匯出 PNG：把每張 .card 序列化成 SVG 再畫到 canvas。
-   走這條路（html-to-image / foreignObject）而不是 html2canvas，
-   是因為霧用了 filter: blur()，html2canvas 會畫成一片死色。
-
-   字型必須內嵌：SVG 當圖片渲染時繼承不到頁面已載入的字型。
-   `window.__EMBED_CSS` 由 scripts/build-embed-fonts.py 子集化產生——
-   沒有它就會 fallback 去即時編碼 21MB 原檔（實測 100 秒以上）。
-   ══════════════════════════════════════════════════════════════ */
-(function () {
-  const btn = document.getElementById('btn-png');
-  if (!btn || !window.htmlToImage) return;
-
-  btn.addEventListener('click', async function () {
-    const label = btn.textContent;
-    const cards = [...document.querySelectorAll('.card')];
-    btn.disabled = true;
-    try {
-      let css = window.__EMBED_CSS;
-      if (!css) {
-        btn.textContent = '⤓ 準備字型…（首次較慢）';
-        css = await htmlToImage.getFontEmbedCSS(cards[0]);
-      }
-      for (let i = 0; i < cards.length; i++) {
-        btn.textContent = '⤓ 匯出中 ' + (i + 1) + ' / ' + cards.length;
-        const card = cards[i];
-        const url = await htmlToImage.toPng(card, {
-          pixelRatio: 1,
-          fontEmbedCSS: css,
-          filter: n => !(n.dataset && n.dataset.noexport)
-        });
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = (card.dataset.filename || 'card' + (i + 1)) + '.png';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        await new Promise(r => setTimeout(r, 400));
-      }
-      btn.textContent = '✓ 已匯出 ' + cards.length + ' 張';
-      setTimeout(() => { btn.textContent = label; }, 2600);
-    } catch (e) {
-      console.error(e);
-      btn.textContent = '✗ 匯出失敗，請看 console';
-      setTimeout(() => { btn.textContent = label; }, 4000);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-})();
-</script>
+<script id="dz-editor-runtime" src="text-editor.js"></script>
 </body>
 </html>

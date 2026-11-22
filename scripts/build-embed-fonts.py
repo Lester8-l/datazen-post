@@ -1,131 +1,228 @@
 #!/usr/bin/env python3
-"""
-把 deck 用到的字，子集化成極小的 WOFF2，內嵌成 `window.__EMBED_CSS`。
+"""Embed complete editable font faces and a compact first-export copy.
 
-為什麼需要這一步？
-    HTML 內建「匯出 PNG」按鈕走 html-to-image（把 DOM 序列化成 SVG 再畫到 canvas）。
-    用 SVG 圖片渲染時，頁面已載入的字型不會被繼承——必須把字型檔本身
-    以 data URI 塞進 SVG，否則整張圖會變成系統字。
-
-    但 Iansui（8.2MB）與霞鶩文楷（13MB）原檔編碼成 base64 要 100 秒以上。
-    所以：只保留 deck 真正用到的字 → 通常 100–200 字 → 20–60KB，出圖由 28 秒變 0.2 秒。
-
-用法:
-    python build-embed-fonts.py deck.html              # 就地注入 <script id="dz-fonts">
-    python build-embed-fonts.py deck.html --dry-run    # 只報告字數與大小
-    python build-embed-fonts.py deck.html --extra 常用字…
-
-注意:
-    子集只覆蓋**出圖當刻**的字。改了字又加了新字，重跑這支腳本即可。
-    （按鈕出圖失敗或見到系統字，就是漏了這一步。）
+Normally use: python scripts/build-embed-fonts.py deck.html
+Use --extra to include planned terms in the compact copy.
+Use --face FAMILY WEIGHT FONT_FILE FACE_INDEX to add a local face.
+Use --only-faces for a custom deck that already defines its font roles.
 """
 import argparse
 import base64
+from dataclasses import dataclass
+from html.parser import HTMLParser
+from importlib.util import find_spec
 import io
-import pathlib
+import json
+import os
+from pathlib import Path
 import re
-import sys
+import shutil
+import subprocess
 
-SKILL = pathlib.Path(__file__).resolve().parent.parent
+from fontTools import subset
+from fontTools.ttLib import TTFont
+from fontTools.varLib.instancer import instantiateVariableFont
+
+SKILL = Path(__file__).resolve().parent.parent
 FONT_DIR = SKILL / "assets" / "fonts"
-FONTS = [
-    ("Iansui Local", "iansui.ttf"),
-    ("LXGW Local", "lxgw-wenkai-tc.ttf"),
-]
-
-# 一定帶上的字符：ASCII、常用標點、數字符號
-ALWAYS = (
-    "".join(chr(c) for c in range(0x20, 0x7F))
-    + "　、。！？；：「」『』（）《》〈〉…—－·～＋－×÷％‰°"
-    + "0123456789０１２３４５６７８９"
-    + "壹貳參肆伍陸柒捌玖拾佰仟萬億"
+ALWAYS = "".join(chr(codepoint) for codepoint in range(32, 127)) + "　、。！？；：「」『』（）《》〈〉…—·＋－×÷％‰°→０１２３４５６７８９"
+FLAVOR = "woff2" if find_spec("brotli") else "woff"
+FONT_TAG = re.compile(
+    r'<(?P<tag>script|style)\b[^>]*\bid=["\']dz-(?:fonts|edit-fonts|font-plan|font-legacy)["\'][^>]*>.*?</(?P=tag)>',
+    re.S | re.I,
 )
-
-TAG = re.compile(r"<[^>]+>")
-BLOCK = re.compile(r"<(script|style)\b.*?</\1>", re.S)
+EXISTING_EDITOR = re.compile(r'<script id="dz-editor-runtime"[^>]*>.*?</script>', re.S)
 
 
-def visible_text(html: str) -> str:
-    s = BLOCK.sub(" ", html)
-    s = TAG.sub(" ", s)
-    s = s.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-    return s
+@dataclass(frozen=True)
+class Face:
+    family: str
+    weight: int
+    file: Path
+    index: int = 0
 
 
-def subset_woff2(ttf: pathlib.Path, chars: str) -> bytes:
-    from fontTools import subset as ftsubset
+class VisibleText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.hidden = False
+        self.segments = []
 
-    opts = ftsubset.Options()
-    opts.flavor = "woff2"
-    opts.layout_features = []      # 卡片只排中文與基本數字，不需要 OT 特性
-    opts.name_IDs = ["*"]
-    opts.notdef_outline = True
-    opts.recalc_bounds = True
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self.hidden = True
 
-    font = ftsubset.load_font(str(ttf), opts)
-    sub = ftsubset.Subsetter(options=opts)
-    sub.populate(text=chars)
-    sub.subset(font)
+    def handle_endtag(self, tag):
+        if tag in ("script", "style"):
+            self.hidden = False
 
-    buf = io.BytesIO()
-    font.save(buf)
-    return buf.getvalue()
+    def handle_data(self, data):
+        if not self.hidden:
+            self.segments.append(data)
+
+
+def visible_text(document):
+    reader = VisibleText()
+    reader.feed(document)
+    return "".join(reader.segments)
+
+
+def desktop_face(family, query, weight):
+    windows = os.environ.get("WINDIR")
+    if windows and query.startswith("Noto Serif"):
+        for name in ("NotoSerifTC-VF.ttf", "NotoSerifHK-VF.ttf"):
+            path = Path(windows) / "Fonts" / name
+            if path.is_file():
+                return Face(family, weight, path)
+    matcher = shutil.which("fc-match")
+    if not matcher:
+        return None
+    result = subprocess.run(
+        [matcher, "-f", "%{family}\n%{file}\n%{index}\n", query],
+        capture_output=True, text=True, check=False,
+    )
+    lines = result.stdout.splitlines()
+    if len(lines) == 3 and query.split(":")[0].casefold() in lines[0].casefold():
+        return Face(family, weight, Path(lines[1]), int(lines[2]))
+    return None
+
+
+def default_faces():
+    faces = [
+        Face("Iansui Local", 400, FONT_DIR / "iansui.ttf"),
+        Face("LXGW Local", 400, FONT_DIR / "lxgw-wenkai-tc.ttf"),
+    ]
+    desktop = [
+        ("Noto Serif TC", "Noto Serif CJK TC:style=Regular", 400),
+        ("Noto Serif TC", "Noto Serif CJK TC:style=Bold", 700),
+        ("JetBrains Mono", "JetBrains Mono", 400),
+        ("Cormorant Garamond", "Cormorant Garamond", 400),
+    ]
+    faces.extend(face for family, query, weight in desktop if (face := desktop_face(family, query, weight)))
+    return faces
+
+
+def font_object(face):
+    font = TTFont(face.file, fontNumber=face.index, recalcTimestamp=False)
+    if "fvar" in font:
+        axes = {axis.axisTag for axis in font["fvar"].axes}
+        if "wght" in axes:
+            instantiateVariableFont(font, {"wght": face.weight}, inplace=True)
+    return font
+
+
+def serialise(font):
+    font.flavor = FLAVOR
+    stream = io.BytesIO()
+    font.save(stream)
+    return stream.getvalue()
+
+
+def declaration(face, data):
+    family = json.dumps(face.family, ensure_ascii=False)
+    b64 = base64.b64encode(data).decode("ascii")
+    return ('@font-face{font-family:%s;font-weight:%d;font-display:block;'
+            'src:url(data:font/%s;base64,%s) format("%s")}' %
+            (family, face.weight, FLAVOR, b64, FLAVOR))
+
+
+def codepoint_ranges(points):
+    groups = []
+    for point in sorted(points):
+        if groups and groups[-1][1] + 1 == point:
+            groups[-1][1] = point
+        else:
+            groups.append([point, point])
+    return groups
+
+
+def font_bank(document, faces, extra=""):
+    chars = "".join(sorted(set(visible_text(document) + ALWAYS + extra)))
+    full_css = []
+    compact_css = []
+    coverage = {}
+    for face in faces:
+        if not face.file.is_file():
+            raise FileNotFoundError(f"缺字型檔案：{face.file}")
+        font = font_object(face)
+        points = set(font.getBestCmap() or {})
+        if not points:
+            raise ValueError(f"字型冇有效字集：{face.file}")
+        coverage.setdefault(face.family.lower(), set()).update(points)
+        full = serialise(font)
+        full_css.append(declaration(face, full))
+        options = subset.Options()
+        options.flavor = FLAVOR
+        options.name_IDs = ["*"]
+        options.drop_tables += ["FFTM"]
+        small = subset.Subsetter(options=options)
+        small.populate(text=chars)
+        small.subset(font)
+        compact = serialise(font)
+        compact_css.append(declaration(face, compact))
+        font.close()
+        print(f"{face.family} {face.weight}: {len(points):,} 字元，完整 {len(full):,} bytes，精簡 {len(compact):,} bytes")
+    return "\n".join(full_css), {
+        "compactChars": chars,
+        "compactCSS": "\n".join(compact_css),
+        "coverage": {family: codepoint_ranges(points) for family, points in coverage.items()},
+    }
+
+
+def embed(document, faces, extra="", overrides=""):
+    document = FONT_TAG.sub("", document)
+    css, plan = font_bank(document, faces, extra)
+    payload = json.dumps(plan, ensure_ascii=True, separators=(",", ":")).replace("<", "\\u003c")
+    tags = (
+        f'<style id="dz-edit-fonts">{css}\n{overrides}</style>\n'
+        f'<script type="application/json" id="dz-font-plan">{payload}</script>\n'
+        '<script id="dz-font-legacy">window.__EMBED_CSS='
+        'Array.from(document.getElementById("dz-edit-fonts").sheet.cssRules)'
+        '.filter(rule=>rule.type===CSSRule.FONT_FACE_RULE).map(rule=>rule.cssText).join("\\n");</script>\n'
+    )
+    if "</head>" not in document:
+        raise ValueError("HTML 需要有 </head>。")
+    document = document.replace("</head>", tags + "</head>", 1)
+    if EXISTING_EDITOR.search(document):
+        source = (SKILL / "assets" / "text-editor.js").read_text(encoding="utf-8")
+        block = '<script id="dz-editor-runtime">\n' + source + '</script>'
+        document = EXISTING_EDITOR.sub(lambda _: block, document, count=1)
+    return document
+
+
+def default_overrides(faces):
+    families = {face.family for face in faces}
+    serif = '"Noto Serif TC","LXGW Local",serif' if "Noto Serif TC" in families else '"LXGW Local",serif'
+    mono = ('"JetBrains Mono",' if "JetBrains Mono" in families else "ui-monospace,") + '"LXGW Local",monospace'
+    digits = ('"Cormorant Garamond",' if "Cormorant Garamond" in families else "") + serif
+    return (
+        ":root{" + f'--serif:{serif};--soft:"LXGW Local",{serif};'
+        f'--hand:"Iansui Local","LXGW Local",{serif};--sans:{serif};--mono:{mono};--en:{digits}' + "}"
+    )
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("deck")
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--extra", default="", help="額外保證收錄的字（例如你打算改用的詞）")
-    args = ap.parse_args()
-
-    deck = pathlib.Path(args.deck).resolve()
-    if not deck.exists():
-        raise SystemExit(f"檔案不存在：{deck}")
-    html = deck.read_text(encoding="utf-8")
-
-    text = visible_text(html) + ALWAYS + args.extra
-    chars = "".join(sorted(set(text)))
-    print(f"deck    : {deck.name}")
-    print(f"字集    : {len(chars)} 個不同字符")
-
-    css_parts = []
-    total = 0
-    for family, fname in FONTS:
-        src = FONT_DIR / fname
-        if not src.exists():
-            raise SystemExit(f"缺字型檔：{src}")
-        data = subset_woff2(src, chars)
-        total += len(data)
-        b64 = base64.b64encode(data).decode()
-        print(f"  {family:<14} {fname:<22} {len(data)/1024:6.1f} KB")
-        css_parts.append(
-            '@font-face{font-family:"%s";src:url(data:font/woff2;base64,%s) format("woff2")}'
-            % (family, b64)
-        )
-
-    css = "".join(css_parts)
-    print(f"合計    : {total/1024:.1f} KB（base64 後 {len(css)/1024:.1f} KB）")
-
-    if args.dry_run:
-        return
-
-    snippet = '<script id="dz-fonts">window.__EMBED_CSS=' + repr(css).replace("'", '"', 2) + ";</script>"
-    # 用 JSON 方式安全嵌入
-    import json
-    snippet = '<script id="dz-fonts">window.__EMBED_CSS=' + json.dumps(css) + ";</script>"
-
-    existing = re.search(r'<script id="dz-fonts">.*?</script>', html, re.S)
-    if existing:
-        html = html[: existing.start()] + snippet + html[existing.end():]
-        action = "更新"
-    else:
-        html = html.replace("</body>", snippet + "\n</body>", 1)
-        action = "注入"
-
-    deck.write_text(html, encoding="utf-8")
-    print(f"✓ {action} <script id=\"dz-fonts\"> 完成")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("deck", type=Path)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--extra", default="")
+    parser.add_argument("--face", action="append", nargs=4, default=[], metavar=("FAMILY", "WEIGHT", "FILE", "INDEX"))
+    parser.add_argument("--only-faces", action="store_true")
+    args = parser.parse_args()
+    faces = [] if args.only_faces else default_faces()
+    indexed = {(face.family, face.weight): face for face in faces}
+    for family, weight, file, index in args.face:
+        face = Face(family, int(weight), Path(file), int(index))
+        indexed[(face.family, face.weight)] = face
+    faces = list(indexed.values())
+    if not faces:
+        parser.error("至少提供一套完整字型。")
+    html = args.deck.read_text(encoding="utf-8")
+    output = embed(html, faces, args.extra, "" if args.only_faces else default_overrides(faces))
+    if not args.dry_run:
+        args.deck.write_text(output, encoding="utf-8")
 
 
 if __name__ == "__main__":
     main()
+
