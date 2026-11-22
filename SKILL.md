@@ -1,6 +1,6 @@
 ---
 name: datazen-post
-description: 把一篇文章、新聞、報告、政策、MPF 制度或一個念頭，做成 Data Zen 品牌的 1080×1350 圖卡（IG 輪播 或 客戶懶人包），一套視覺語言兩個出口。內建 8 款版型（封面／宣言／數字／明細／清單／對照／收尾／懶人包）、三層翻譯法、8 類懶人包題材、五支檢查（版面溢出、孤字、對比度、來源、合規）同出 PNG／PDF。當用戶說「出 IG 貼文」「做個 carousel」「變成 IG 圖」「出懶人包」「發俾客人」「講下 MPF」「把呢篇文章變成圖」時使用。**流程第一步一律先確認模式（IG／懶人包）。**
+description: 把一篇文章、新聞、報告、政策、MPF 制度或一個念頭，做成 Data Zen 品牌的 1080×1350 圖卡（IG 輪播 或 客戶懶人包），一套視覺語言兩個出口。內建 8 款版型（封面／宣言／數字／明細／清單／對照／收尾／懶人包）、三層翻譯法、8 類懶人包題材、圖片生成與角色場景指引、五支檢查（版面溢出、孤字、對比度、來源、合規）同出 PNG／PDF。當用戶說「出 IG 貼文」「做個 carousel」「變成 IG 圖」「做插畫輪播」「出懶人包」「發俾客人」「講下 MPF」「把呢篇文章變成圖」時使用。**流程第一步一律先確認模式（IG／懶人包）。**
 agent_created: true
 ---
 
@@ -27,7 +27,7 @@ agent_created: true
 
 - 講明「IG」「carousel」「貼文」「輪播」→ 模式 A，不用問。
 - 講明「俾客人」「WhatsApp」「懶人包」「分享呢單新聞」→ 模式 B，不用問。
-- **兩者都沒講** → `AskUserQuestion` 問一次：這是給陌生人看的（IG），還是發給特定客戶的（懶人包）？
+- **兩者都沒講** → 用目前環境的提問工具問一次，確認這是給陌生人看的（IG），還是發給特定客戶的（懶人包）。
 - 模式 B 但沒講題材 → 再問一題：哪一類？（見 `references/types-library.md` 的 8 類）
 
 其餘分叉（結尾軟性／引導、素材來源）一次問完，不要逐個問。
@@ -36,8 +36,8 @@ agent_created: true
 
 ## 工作流程（兩段式）
 
-> **預設先交文字稿，不生成 HTML。** 他要先改字；直接出圖會令他改在錯的地方。
-> 只有他明說「內容確認了，直接出圖」才跳去第 5 步。
+> **預設先交文字稿及畫面構想，等確認後再生成圖片和排版。**
+> 用戶明確要求直接出圖，或已確認文案同整體方向，就進入第二段。
 
 ### 第一段：文字稿
 
@@ -46,25 +46,27 @@ agent_created: true
    只給題目 → 先查（WebSearch／WebFetch），把來源列出來讓他確認。
 2. **跑框架**：模式 B 用三層翻譯（發生咩事 → 點解關你事 → 你可以點做），
    見 `references/content-framework.md`；模式 A 用「一句立場 + 一個數字 + 一個動作」。
-3. **選版型**：見 `references/layouts.md`。同款不連續，每三張要有一張有數據。
-4. **寫文字稿並交付**（`文字稿.md`），用 `present_files` 給他，**停下來等確認**。
+3. **選版型及畫面**。見 `references/layouts.md`。同款不連續，每三張要有一張有數據。有圖嘅卡加一行 `[畫面]`，寫清楚場景、角色動作同文字留白。涉及人物或吉祥物時，讀 `references/brand.md` 第六節。
+4. **寫文字稿並交付**（`文字稿.md`），按目前環境提供可開啟的檔案連結，**停下來等確認**。
    格式見下節。這一步不碰 HTML。
 5. **順手自檢**：對照「合規與來源」掃一次，有禁詞或來源不全就當場改。
 
 ### 第二段：確認後開工
 
-6. **生成 HTML**：複製 `assets/template.html` 的完整結構與 `<style>`，
+6. **選擇及準備圖片**。見 [`references/images.md`](references/images.md)。新場景、人物新動作、角色互動或滿版敘事插畫，呼叫圖片生成工具。有合適嘅既有素材或以資訊為主嘅卡，直接排版。角色出場時把固定參考圖交畀圖片工具，續頁可加已確認嘅無字封面底圖。先做封面樣稿適用於用戶想先睇方向嘅情況。方向已確認就接住完成餘頁。
+7. **以模板生成 HTML**。複製 `assets/template.html` 的完整結構與 `<style>`，
    按選中的卡**逐塊保留**（沒選中的整塊刪掉，連 `.card-wrap` 一起）。
    轉換規則：
    - 文字稿的 `｜` → `<br>`
    - 每卡第一行的「版型：cover」→ 對應 `data-type="cover"`
    - 設定區的帳號 → `DZ_CONFIG.handle`、關鍵字 → `keywords`
-   - `class="card mist"` 之後按順序加 `v2` / `v3`（霧的漸層變化），**不要連續兩張同一個**
-7. **做字型子集**（出 PNG 按鈕要用，見下節）：
+   - 標準霧底用 `v2` / `v3` 隔頁轉變漸層。滿版插畫用同一套色溫同光線，按每頁分鏡安排留白。
+   - 將核對過嘅底圖嵌入 HTML，確保預覽及匯出可載入。標題、數字、圖表、來源及免責用排版層製作，保留精確文字同刻度。
+8. **執行字型子集腳本**，讓 HTML 嘅「匯出 PNG」按鈕載入正確字型。
    ```bash
    python scripts/build-embed-fonts.py <deck.html>
    ```
-8. **跑五支檢查（全部都要跑）**：
+9. **用以下腳本逐項檢查同出圖**。
    ```bash
    python scripts/check-fit.py      <deck.html>              # 溢出裁切（模式 B 加 --require-src）
    python scripts/check-orphans.py  <deck.html>              # 孤字 + 結構破損
@@ -73,16 +75,14 @@ agent_created: true
    python scripts/export-png.py     <deck.html> --out out/   # 出圖
    python scripts/check-contrast.py out/                     # 白字對比度（出圖後才量）
    ```
-   **任何一支 exit 1 都不准交付。** 修法見下節「常見坑」。
-9. **看原圖**：工具抓得到溢出、孤字、違規、低對比，抓不到「斷行位置好不好」。
-   逐張看一次，特別是中文字尾被切開的斷法。
-10. **交付**：`present_files` 給 HTML（可預覽可改字）＋ PNG。
-   模式 B 再加 PDF：
-   ```bash
-   python scripts/export-pdf.py <deck.html> --out out/pack.pdf           # 4:5 存檔
-   python scripts/export-pdf.py <deck.html> --a4 --out out/pack-A4.pdf   # 打印
-   ```
-   附一句：「發圖前建議口頭再講一次重點，圖是輔助不是代替對話。」
+   修正所有檢查發現嘅問題。瀏覽器匯出受環境限制時，可用同一份資料和字型重現版面，核對成品嘅字框、對比、尺寸及內容，並如實交代驗證結果。
+10. **檢視原尺寸同手機縮圖**。逐張核對斷行、裁切、角色比例同局部對比。數字同單位要對齊，圖表嘅長度、零點及刻度要同試算一致。
+11. **交付可開啟嘅 HTML 同 PNG**。HTML 用於預覽同改字，模式 B 另出 4:5 存檔版同 A4 打印版 PDF。
+    ```bash
+    python scripts/export-pdf.py <deck.html> --out out/pack.pdf           # 4:5 存檔
+    python scripts/export-pdf.py <deck.html> --a4 --out out/pack-A4.pdf   # 打印
+    ```
+    附一句「發圖前建議口頭再講一次重點，圖是輔助不是代替對話。」
 
 ---
 
@@ -243,6 +243,7 @@ SVG 當圖片渲染時繼承不到頁面已載入的字型，必須把字型檔�
 
 - `assets/template.html` — 主模板：8 款版型 + 霧的六層 + 刻度尺 + 設定區 + 編輯模式 + 列印 CSS。
 - `assets/fonts/` — Iansui、霞鶩文楷（本地檔，出圖靠它們）。
+- `assets/characters/` — 固定角色參考圖嘅預設位置，使用規則見 `references/brand.md` 第六節。
 - `scripts/_serve.py` — 臨時 http server ＋ `/fonts/` alias。**所有要開瀏覽器的腳本都經它。**
 - `scripts/check-fit.py` — 溢出與留白（`--require-src` 給模式 B）。
 - `scripts/check-orphans.py` — 孤字與結構破損。
@@ -256,6 +257,7 @@ SVG 當圖片渲染時繼承不到頁面已載入的字型，必須把字型檔�
 - `references/brand.md` — **品牌與視覺規則。改設計前先讀。**
 - `references/playbook.md` — **實操手冊：真實出圖中過嘅伏、修復數字、模板維護與合規原則。**
 - `references/layouts.md` — 8 款版型與選版規則。
+- `references/images.md` — 出圖時機、固定角色參考、完整場景、圖文留白及 MPF 輪播分鏡。
 - `references/content-framework.md` — 三層翻譯法、標題公式、來源規範、題材禁區。
 - `references/types-library.md` — 8 類懶人包的角度、合規注意、建議來源。
 - `references/topic-library.md` — 10 個常見題材的切入角度。

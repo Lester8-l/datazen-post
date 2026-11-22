@@ -9,6 +9,7 @@
 
 ```
 文字稿（等確認）
+→ 需要新場景或角色動作時，按 images.md 定分鏡同生成底圖
 → 生成 deck.html
 → check-fit（溢出）＋ check-orphans（孤字）
 → check-source（模式 B）＋ check-compliance
